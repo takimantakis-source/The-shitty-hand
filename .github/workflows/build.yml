@@ -1,0 +1,37 @@
+name: Build APK from zip
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  android:
+    runs-on: ubuntu-22.04
+    container:
+      image: barichello/godot-ci:4.3
+    env:
+      GODOT_VERSION: "4.3"
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q ./*.zip
+      - name: Set up Godot
+        run: |
+          if [ "$HOME" != "/root" ]; then
+            mkdir -p ~/.local/share/godot/export_templates ~/.config/godot
+            mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+            cp -a /root/.config/godot/. ~/.config/godot/ || true
+          fi
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+      - name: Build APK
+        working-directory: the-shitty-hand
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          godot --headless --editor --quit || true
+          mkdir -p build
+          godot --headless --verbose --export-debug "Android" build/the-shitty-hand-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: the-shitty-hand-apk
+          path: the-shitty-hand/build/*.apk
